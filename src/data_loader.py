@@ -3,35 +3,17 @@ from sklearn.model_selection import train_test_split
 from typing import Tuple, Dict
 
 class DataLoader:
-    def __init__(self, resume_path: str, job_desc_path: str):
-        self.resume_path = resume_path
-        self.job_desc_path = job_desc_path
-    
-    def load_data(self) -> Tuple[pd.DataFrame, str]:
-        """Load resume data and job description"""
-        # Read CSV with the correct columns
-        resumes = pd.read_csv(self.resume_path)
-        
-        # Verify required columns exist
-        required_columns = ['ID', 'Resume_str', 'Resume_html', 'Category']
-        if not all(col in resumes.columns for col in required_columns):
-            raise ValueError(f"CSV must contain columns: {required_columns}")
-        
-        # Read job description
-        with open(self.job_desc_path, 'r') as f:
-            job_description = f.read()
-            
-        return resumes, job_description
-    
-    def split_data(self, data: pd.DataFrame, test_size: float = 0.2) -> Dict[str, pd.DataFrame]:
-        """Split data into train and test sets"""
-        train_data, test_data = train_test_split(
-            data, 
-            test_size=test_size, 
-            random_state=42,
-            stratify=data['Category'] if len(data['Category'].unique()) > 1 else None
-        )
-        return {
-            'train': train_data,
-            'test': test_data
-        }
+    def __init__(self, dataset_path: str):
+        self.dataset_path = dataset_path
+
+    def load_data(self) -> pd.DataFrame:
+        """Load the structured dataset"""
+        data = pd.read_csv(self.dataset_path)
+        return data
+
+    def split_data(self, data: pd.DataFrame, test_size: float = 0.2) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        """Split the data into training and testing sets"""
+        X = data[['education', 'experience', 'projects', 'skills']]
+        y = data['score']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        return X_train, X_test, y_train, y_test
