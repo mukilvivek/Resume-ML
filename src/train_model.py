@@ -27,7 +27,7 @@ def main():
     
     # Train the model
     print("\nTraining model...")
-    trainer.train(X_train, y_train, job_description)
+    trainer.train(X_train, y_train, job_description, fit_tfidf=True)
     
     # Evaluate the model
     print("\nEvaluating model...")

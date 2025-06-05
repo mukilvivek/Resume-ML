@@ -20,11 +20,24 @@ class HybridResumeTrainer:
             max_depth=None,
             random_state=42
         )
+        self.education_categories = None
         
-    def prepare_features(self, X: pd.DataFrame, job_description: str):
+    def prepare_features(self, X: pd.DataFrame, job_description: str, fit_tfidf: bool = False):
         """Prepare both content-based and similarity features"""
         # 1. Process education
-        education_encoded = self.education_encoder.fit_transform(X['education'])
+        if fit_tfidf:
+            # During training, fit the encoder with categories including 'Unknown'
+            self.education_categories = list(X['education'].unique()) + ['Unknown']
+            education_encoded = self.education_encoder.fit_transform(self.education_categories)
+            # Map actual education values
+            education_idx = pd.Series(X['education']).map(
+                {cat: idx for idx, cat in enumerate(self.education_categories[:-1])}
+            ).fillna(len(self.education_categories) - 1)  # Use last index for Unknown
+        else:
+            # During prediction, map unseen categories to 'Unknown'
+            education_idx = pd.Series(X['education']).map(
+                {cat: idx for idx, cat in enumerate(self.education_categories[:-1])}
+            ).fillna(len(self.education_categories) - 1)
         
         # 2. Process text fields with TF-IDF
         experience_text = X['experience'].fillna('')
@@ -33,7 +46,10 @@ class HybridResumeTrainer:
         
         # Combine text features
         combined_text = experience_text + ' ' + projects_text + ' ' + skills_text
-        content_features = self.tfidf.fit_transform(combined_text).toarray()
+        if fit_tfidf:
+            content_features = self.tfidf.fit_transform(combined_text).toarray()
+        else:
+            content_features = self.tfidf.transform(combined_text).toarray()
         
         # 3. Calculate similarity scores with job description
         similarity_scores = []
@@ -45,17 +61,19 @@ class HybridResumeTrainer:
         
         # 4. Combine all features
         features = np.column_stack((
-            education_encoded.reshape(-1, 1),
+            education_idx.values.reshape(-1, 1),
             content_features,
             np.array(similarity_scores).reshape(-1, 1)
         ))
         
         return features
     
-    def train(self, X_train: pd.DataFrame, y_train: pd.Series, job_description: str):
+    def train(self, X_train: pd.DataFrame, y_train: pd.Series, job_description: str, fit_tfidf: bool = True):
         """Train the hybrid model"""
         print("Preparing features...")
-        X_processed = self.prepare_features(X_train, job_description)
+        # Ensure education categories are captured during training
+        self.education_categories = X_train['education'].unique()
+        X_processed = self.prepare_features(X_train, job_description, fit_tfidf=fit_tfidf)
         
         print("Training Random Forest model...")
         self.rf_model.fit(X_processed, y_train)
@@ -92,7 +110,8 @@ class HybridResumeTrainer:
             'bert_model': self.bert_model,
             'education_encoder': self.education_encoder,
             'tfidf': self.tfidf,
-            'rf_model': self.rf_model
+            'rf_model': self.rf_model,
+            'education_categories': self.education_categories
         }
         with open(output_path, 'wb') as f:
             pickle.dump(model_data, f)
